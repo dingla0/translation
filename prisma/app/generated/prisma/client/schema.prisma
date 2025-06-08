@@ -1,0 +1,211 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "app/generated/prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String?   @unique
+  name          String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+
+  projects     Project[]
+  comments     Comment[]     @relation("UserComments")
+  activityLogs ActivityLog[] @relation("UserActivityLogs")
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id])
+
+  segments   Segment[]
+  tms        TranslationMemory[]
+  glossaries GlossaryEntry[]
+
+  languagePairs LanguagePair[]
+  fileUploads   FileUpload[]
+}
+
+model Segment {
+  id         String        @id @default(uuid())
+  index      Int
+  sourceText String
+  targetText String?
+  status     SegmentStatus @default(DRAFT)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  comments     Comment[]     @relation("SegmentComments")
+  activityLogs ActivityLog[] @relation("SegmentActivityLogs")
+  tags         Tag[]         @relation("SegmentTags")
+  segmentTags  SegmentTag[]
+}
+
+enum SegmentStatus {
+  DRAFT
+  TRANSLATED
+  REVIEWED
+}
+
+model TranslationMemory {
+  id         String   @id @default(uuid())
+  sourceText String
+  targetText String
+  langPair   String // e.g., "en-ko"
+  score      Int      @default(100) // match % if fuzzy
+  createdAt  DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+}
+
+model GlossaryEntry {
+  id          String   @id @default(uuid())
+  term        String
+  definition  String?
+  sourceLang  String
+  targetLang  String
+  translation String?
+  createdAt   DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  tags              Tag[]              @relation("GlossaryTags")
+  glossaryEntryTags GlossaryEntryTag[]
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String
+  createdAt DateTime @default(now())
+
+  authorId String
+  author   User   @relation("UserComments", fields: [authorId], references: [id])
+
+  segmentId String
+  segment   Segment @relation("SegmentComments", fields: [segmentId], references: [id])
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  action    String // e.g. "EDIT", "SAVE", "STATUS_CHANGE"
+  detail    String?
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation("UserActivityLogs", fields: [userId], references: [id])
+
+  segmentId String
+  segment   Segment @relation("SegmentActivityLogs", fields: [segmentId], references: [id])
+}
+
+model LanguagePair {
+  id         String   @id @default(uuid())
+  sourceLang String // e.g. "en"
+  targetLang String // e.g. "ko"
+  createdAt  DateTime @default(now())
+
+  projects Project[]
+}
+
+model FileUpload {
+  id         String   @id @default(uuid())
+  filename   String
+  fileType   String
+  url        String
+  uploadedAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+}
+
+model Tag {
+  id   String @id @default(uuid())
+  name String
+
+  glossaryEntries   GlossaryEntry[]    @relation("GlossaryTags")
+  segments          Segment[]          @relation("SegmentTags")
+  glossaryEntryTags GlossaryEntryTag[]
+  segmentTags       SegmentTag[]
+}
+
+// Optional tag relations
+model GlossaryEntryTag {
+  id         String @id @default(uuid())
+  glossaryId String
+  tagId      String
+
+  glossaryEntry GlossaryEntry @relation(fields: [glossaryId], references: [id])
+  tag           Tag           @relation(fields: [tagId], references: [id])
+}
+
+model SegmentTag {
+  id        String @id @default(uuid())
+  segmentId String
+  tagId     String
+
+  segment Segment @relation(fields: [segmentId], references: [id])
+  tag     Tag     @relation(fields: [tagId], references: [id])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
